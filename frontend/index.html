@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RBAC Tool</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+    input, select, button {
+      margin-top: 0.5rem;
+      padding: 0.4rem;
+      width: 100%;
+    }
+    button {
+      cursor: pointer;
+    }
+</style>
+  <script>
+    // Function to load namespaces from the backend API
+    async function loadNamespaces() {
+      const res = await fetch('/api/namespaces');
+      const data = await res.json();
+      const input = document.getElementById("namespace");
+      const list = document.getElementById("namespaces");
+      input.addEventListener("input", function () {
+        const val = this.value.toLowerCase();  // Get the user input
+        list.innerHTML = ""; // Clear the existing options
+
+        // Filter and display only valid namespaces
+        data.forEach(ns => {
+          if (ns.toLowerCase().includes(val) && !ns.toLowerCase().endsWith('-prod')) {
+            const option = document.createElement("option");
+            option.value = ns;
+            list.appendChild(option);  // Add filtered namespace to the datalist
+          }
+        });
+      });
+    }
+
+    // Function to handle form submission
+    async function submitForm() {
+        const username = document.getElementById("username").value.trim();
+        const namespace = document.getElementById("namespace").value.trim();
+        const role = document.getElementById("role").value;
+        const durationValue = parseFloat(document.getElementById("duration-value").value);
+        const unit = document.getElementById("duration-unit").value;
+
+        if (!username || !namespace || isNaN(durationValue) || durationValue <= 0) {
+            alert("Please fill out all fields with valid values.");
+            return;
+        }
+
+        const durationInHours = unit === "minutes"
+            ? (durationValue / 60).toFixed(2)
+            : durationValue.toFixed(2);
+
+        const data = {
+            username,
+            namespace,
+            duration: parseFloat(durationInHours),
+            role
+        };
+
+        try {
+            const res = await fetch("/api/create", {
+            method: "POST",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+            });
+
+            const msg = await res.json();
+            alert(msg.message || msg.error || "Unknown error occurred");
+        } catch (err) {
+            alert("Failed to send request: " + err.message);
+        }
+    }
+
+    // Function to cleanup expired RoleBindings
+    async function cleanupexpiredRoleBindings() {
+        try {
+            let response = await fetch("/api/cleanup", { method: "POST" });
+            let data = await response.json();
+            alert(data.message);
+        } catch (error) {
+            console.error("Error:", error);
+            alert("Failed to trigger cleanup.");
+        }
+    }
+
+    // Load namespaces on window load
+    window.onload = loadNamespaces;
+  </script>
+</head>
+<body>
+  <h2>Request RBAC Access</h2>
+  <form onsubmit="event.preventDefault(); submitForm();">
+    <label>Username: <input id="username" required /></label><br><br>
+    
+    <!-- Namespace input with datalist for filtering -->
+    <label>Namespace: 
+      <input id="namespace" list="namespaces" required />
+      <datalist id="namespaces"></datalist>
+    </label><br><br>
+
+    <label>Role:
+      <select id="role">
+        <option value="view">View</option>
+        <option value="edit">Edit</option>
+      </select>
+    </label><br><br>
+
+    <label>Duration (minutes):
+        <div style="display: flex; gap: 0.5rem;">
+            <input type="number" id="duration-value" placeholder="Enter duration" required />
+            <select id="duration-unit">
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
+          </div>
+    </label><br><br>
+
+    <button type="submit">Request Access</button><br><br>
+    <button type="button" onclick="cleanupexpiredRoleBindings()">Cleanup Expired RoleBindings</button>
+  </form>
+</body>
+</html>
